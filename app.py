@@ -1,50 +1,83 @@
-# Q&A Chatbot
-#from langchain.llms import OpenAI
-
-from dotenv import load_dotenv
-
-load_dotenv()  # take environment variables from .env.
-
 import streamlit as st
-import os
-import pathlib
-import textwrap
-
 import google.generativeai as genai
 
-from IPython.display import display
-from IPython.display import Markdown
+# Configure the model
+genai.configure(api_key="AIzaSyBZmyKqMVWxFn6q4SJ3CTa3MJcKZg2cIjA")
 
+# Set up the model
+generation_config = {
+  "temperature": 0.9,
+  "top_p": 1,
+  "top_k": 1,
+  "max_output_tokens": 2048,
+}
 
-def to_markdown(text):
-  text = text.replace('•', '  *')
-  return Markdown(textwrap.indent(text, '> ', predicate=lambda _: True))
+safety_settings = [
+  {
+    "category": "HARM_CATEGORY_HARASSMENT",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+  {
+    "category": "HARM_CATEGORY_HATE_SPEECH",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+  {
+    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+  {
+    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+]
 
-os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+model = genai.GenerativeModel(model_name="gemini-1.0-pro",
+                              generation_config=generation_config,
+                              safety_settings=safety_settings)
 
-## Function to load OpenAI model and get respones
+# Streamlit app title
+st.title("Child Psychology Chatbot")
 
-def get_gemini_response(question):
-    model = genai.GenerativeModel('gemini-pro')
-    response = model.generate_content(question)
+# Initialize a session to keep track of the conversation
+session_state = st.session_state
+if "conversation" not in session_state:
+    session_state.conversation = []
+
+# Function to generate a response
+def generate_response(user_input):
+    prompt_parts = [
+        f"input: {user_input}",
+        "output: "
+    ]
+    response = model.generate_content(prompt_parts)
     return response.text
 
-##initialize our streamlit app
+# Main area for displaying the conversation
+chat_container = st.container()
+with chat_container:
+    st.image("https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/285/mobile-phone_1f4f1.png", width=50)
+    st.write("Hi there! I'm here to help with any questions you have about your child's mental health.")
+    st.write("Feel free to ask me anything.")
 
-st.set_page_config(page_title="Q&A Demo")
+# Sidebar for user input
+user_input = st.text_input("Your message:")
+submit_button = st.button("Send")
 
-st.header("Gemini Application")
+if submit_button:
+    if user_input.lower() in ["quit", "exit"]:
+        session_state.conversation.append("You: " + user_input)
+        session_state.conversation.append("Bot: Conversation ended.")
+    else:
+        # Generate the response
+        response = generate_response(user_input)
+        # Add the user's question and the bot's response to the conversation
+        session_state.conversation.append("You: " + user_input)
+        session_state.conversation.append("Bot: " + response)
 
-input=st.text_input("Input: ",key="input")
-
-
-submit=st.button("Ask the question")
-
-## If ask button is clicked
-
-if submit:
-    
-    response=get_gemini_response(input)
-    st.subheader("The Response is")
-    st.write(response)
+# Display conversation
+with chat_container:
+    for message in session_state.conversation:
+        if message.startswith("You:"):
+            st.text_area("You:", value=message, height=100, max_chars=None, key=None)
+        elif message.startswith("Bot:"):
+            st.text_area("Bot:", value=message, height=100, max_chars=None, key=None)
